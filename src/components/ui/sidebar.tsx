@@ -1,19 +1,20 @@
+import React from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/services/supabaseClient';
 
-{
+const Sidebar = ({ tenantName }: { tenantName: string }) => {
   const navigation = [
-    { name: 'Dashboard', href: '/dashboard', hidden: true }, // Hidden link
+    { name: 'Dashboard', href: '/dashboard', hidden: true },
     { name: 'Bookings', href: '/dashboard/bookings' },
-    { name: 'Media', href: '/dashboard/media', isDefault: true }, // Default link
+    { name: 'Media', href: '/dashboard/media', isDefault: true },
     { name: 'Invoices', href: '/dashboard/invoices' },
   ];
 
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
     if (!error) {
-      window.location.href = '/auth'; // Redirect to login page
+      window.location.href = '/auth';
     } else {
       console.error('Logout failed:', error.message);
     }
@@ -22,11 +23,11 @@ import { supabase } from '@/services/supabaseClient';
   return (
     <div className="flex flex-col h-screen w-64 bg-gray-900 text-white">
       <div className="px-6 py-4 border-b border-gray-800">
-        <h1 className="text-xl font-semibold">OOH WORLD</h1>
+        <h1 className="text-xl font-semibold">{tenantName || 'OOH WORLD'}</h1>
       </div>
       <nav className="flex flex-col flex-grow px-4 py-6 space-y-2">
         {navigation
-          .filter((item) => !item.hidden) // Hide links with `hidden: true`
+          .filter((item) => !item.hidden)
           .map((item) => (
             <Link
               key={item.name}
