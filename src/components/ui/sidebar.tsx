@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/services/supabaseClient';
 
-const Sidebar = ({ tenantName }: { tenantName: string }) => {
+{
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', hidden: true }, // Hidden link
     { name: 'Bookings', href: '/dashboard/bookings' },

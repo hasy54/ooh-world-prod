@@ -14,7 +14,6 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false); // Loading state
   const [error, setError] = useState(''); // Error state
   const [successMessage, setSuccessMessage] = useState(''); // Success state
-  const [logoFile, setLogoFile] = useState<File | null>(null); // Logo file for upload
 
   // Fetch tenant details
   const fetchTenantDetails = async () => {

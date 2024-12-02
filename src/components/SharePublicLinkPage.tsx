@@ -1,6 +1,5 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { supabase } from '@/services/supabaseClient';
 
 export default function SharePublicLinkPage() {

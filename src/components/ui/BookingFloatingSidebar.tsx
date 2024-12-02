@@ -15,12 +15,12 @@ export default function BookingFloatingSidebar({
 }: {
   isOpen: boolean;
   onClose: () => void;
-  booking?: any;
+  booking?: unknown;
   isAddBooking?: boolean;
-  newBooking?: any;
-  setNewBooking?: (data: any) => void;
-  availableMedia?: any[];
-  intervals?: any[];
+  newBooking?: unknown;
+  setNewBooking?: (data: unknown) => void;
+  availableMedia?: unknown[];
+  intervals?: unknown[];
   estimatedCost?: number;
   calculateEstimate?: () => void;
   fetchBookings?: () => void;
@@ -113,7 +113,7 @@ export default function BookingFloatingSidebar({
               Dates: {booking.start_date} to {booking.end_date}
             </p>
             <h4 className="mt-4 font-semibold">Media Details:</h4>
-            {booking.bookings?.map((b: any) => (
+            {booking.bookings?.map((b: unknown) => (
               <div key={b.id} className="p-2 bg-gray-100 rounded mb-2">
                 <p>Media: {b.media.name}</p>
                 <p>Type: {b.media.type}</p>
