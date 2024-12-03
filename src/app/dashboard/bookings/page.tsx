@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/services/supabaseClient';
 import FloatingSidebar from '@/components/ui/FloatingSidebar';
 
@@ -140,16 +140,21 @@ export default function BookingsPage() {
       });
 
       setAllMedia(processedMedia || []);
-    } catch (err: any) {
-      console.error('Error in fetchBookingsAndMedia:', err.message);
-      setError(err.message);
+    } catch (err) {
+      if (err instanceof Error) {
+        console.error('Error in fetchBookingsAndMedia:', err.message);
+        setError(err.message);
+      } else {
+        console.error('Unknown error in fetchBookingsAndMedia:', err);
+        setError('An unknown error occurred');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   // Calculate estimated cost and end date
-  const calculateEstimate = () => {
+  const calculateEstimate = useCallback(() => {
     if (
       !newBooking.start_date ||
       !newBooking.interval ||
@@ -168,7 +173,13 @@ export default function BookingsPage() {
 
     setEstimatedCost(totalCost);
     console.log('Calculated estimate:', { totalCost });
-  };
+  }, [
+    newBooking.start_date,
+    newBooking.interval,
+    newBooking.media_ids,
+    allMedia,
+    intervals,
+  ]);
 
   // Handle booking creation
   const handleAddBooking = async () => {
@@ -240,9 +251,14 @@ export default function BookingsPage() {
       });
       setEstimatedCost(0);
       fetchBookingsAndMedia();
-    } catch (err: any) {
-      console.error('Error in handleAddBooking:', err.message);
-      setError(err.message);
+    } catch (err) {
+      if (err instanceof Error) {
+        console.error('Error in handleAddBooking:', err.message);
+        setError(err.message);
+      } else {
+        console.error('Unknown error in handleAddBooking:', err);
+        setError('An unknown error occurred');
+      }
     }
   };
 
@@ -275,9 +291,14 @@ export default function BookingsPage() {
 
       // Refresh data
       fetchBookingsAndMedia();
-    } catch (err: any) {
-      console.error('Error in handleDeleteBooking:', err.message);
-      setError(err.message);
+    } catch (err) {
+      if (err instanceof Error) {
+        console.error('Error in handleDeleteBooking:', err.message);
+        setError(err.message);
+      } else {
+        console.error('Unknown error in handleDeleteBooking:', err);
+        setError('An unknown error occurred');
+      }
     }
   };
 
@@ -287,7 +308,7 @@ export default function BookingsPage() {
 
   useEffect(() => {
     calculateEstimate();
-  }, [newBooking.start_date, newBooking.interval, newBooking.media_ids]);
+  }, [calculateEstimate]);
 
   return (
     <div>
@@ -398,9 +419,11 @@ export default function BookingsPage() {
                         {!media.is_available && (
                           <span>
                             Available from:{' '}
-                            {new Date(
-                              media.nextAvailableDate!
-                            ).toLocaleDateString()}
+                            {media.nextAvailableDate
+                              ? new Date(
+                                  media.nextAvailableDate
+                                ).toLocaleDateString()
+                              : 'N/A'}
                           </span>
                         )}
                       </label>
