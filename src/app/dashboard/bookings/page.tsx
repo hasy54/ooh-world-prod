@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/services/supabaseClient';
 import FloatingSidebar from '@/components/ui/FloatingSidebar';
 
+// Define the Booking type
 type Booking = {
   id: number;
   client_name: string;
@@ -31,7 +32,7 @@ type Media = {
 };
 
 export default function BookingsPage() {
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]); // Explicit type
   const [allMedia, setAllMedia] = useState<Media[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -39,7 +40,7 @@ export default function BookingsPage() {
 
   const [newBooking, setNewBooking] = useState({
     client_name: '',
-    media_ids: [] as number[],
+    media_ids: [] as number[], // Explicit type for media_ids
     start_date: '',
     interval: '',
   });
@@ -52,6 +53,7 @@ export default function BookingsPage() {
     { label: '3 Months', days: 90 },
   ];
 
+  // Fetch bookings and media
   const fetchBookingsAndMedia = async () => {
     try {
       setLoading(true);
@@ -129,80 +131,9 @@ export default function BookingsPage() {
     }
   };
 
-  const calculateEstimate = () => {
-    if (!newBooking.start_date || !newBooking.interval || newBooking.media_ids.length === 0) {
-      setEstimatedCost(0);
-      return;
-    }
-
-    const intervalDays =
-      intervals.find((i) => i.label === newBooking.interval)?.days || 0;
-
-    const totalCost = newBooking.media_ids.reduce((acc, mediaId) => {
-      const media = allMedia.find((m) => m.id === mediaId);
-      return acc + (media ? media.price * intervalDays : 0);
-    }, 0);
-
-    setEstimatedCost(totalCost);
-  };
-
-  const handleAddBooking = async () => {
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-
-      if (!sessionData.session) {
-        console.error('No session found. Redirecting to auth.');
-        window.location.href = '/auth';
-        return;
-      }
-
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('tenant_id')
-        .eq('id', sessionData.session.user.id)
-        .single();
-
-      if (profileError || !profile) {
-        console.error('Error fetching profile:', profileError);
-        throw new Error('Unable to fetch user profile');
-      }
-
-      const intervalDays =
-        intervals.find((i) => i.label === newBooking.interval)?.days || 0;
-      const endDate = new Date(newBooking.start_date);
-      endDate.setDate(endDate.getDate() + intervalDays);
-
-      for (const mediaId of newBooking.media_ids) {
-        const { error: bookingError } = await supabase.from('bookings').insert({
-          media_id: mediaId,
-          start_date: newBooking.start_date,
-          end_date: endDate.toISOString().split('T')[0],
-          tenant_id: profile.tenant_id,
-          client_name: newBooking.client_name,
-        });
-
-        if (bookingError) throw new Error('Failed to add booking');
-
-        await supabase.from('media').update({ is_available: false }).eq('id', mediaId);
-      }
-
-      setIsSidebarOpen(false);
-      setNewBooking({ client_name: '', media_ids: [], start_date: '', interval: '' });
-      setEstimatedCost(0);
-      fetchBookingsAndMedia();
-    } catch (err: any) {
-      console.error('Error in handleAddBooking:', err.message);
-      setError(err.message);
-    }
-  };
-
   useEffect(() => {
     fetchBookingsAndMedia();
   }, []);
-
-  useEffect(() => {
-    calculateEstimate();
-  }, [newBooking.start_date, newBooking.interval, newBooking.media_ids]);
 
   if (loading) return <div>Loading...</div>;
   if (error) return <div className="text-red-500">{error}</div>;
@@ -210,12 +141,6 @@ export default function BookingsPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-4">Bookings</h1>
-      <button
-        onClick={() => setIsSidebarOpen(true)}
-        className="px-4 py-2 bg-blue-500 text-white rounded-md mb-4 hover:bg-blue-600"
-      >
-        Add New Booking
-      </button>
       <ul className="space-y-4">
         {bookings.map((booking) => (
           <li key={booking.id} className="p-4 bg-white shadow rounded">
