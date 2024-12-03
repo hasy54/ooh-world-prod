@@ -3,20 +3,39 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/services/supabaseClient';
 
+// Define types for enquiries and media
+interface Media {
+  name: string;
+  type: string;
+  location: string;
+  price: number;
+}
+
+interface Enquiry {
+  id: number;
+  media_id: number;
+  client_name: string;
+  client_email: string;
+  client_phone: string | null;
+  message: string | null;
+  created_at: string;
+  media: Media[];
+}
+
 export default function EnquiryListPage() {
-  const [enquiries, setEnquiries] = useState([]); // List of enquiries
-  const [loading, setLoading] = useState(true); // Loading state
-  const [error, setError] = useState(''); // Error messages
+  const [enquiries, setEnquiries] = useState<Enquiry[]>([]); // List of enquiries
+  const [loading, setLoading] = useState<boolean>(true); // Loading state
+  const [error, setError] = useState<string | null>(null); // Error messages
 
   // Fetch enquiries for the tenant
-  const fetchEnquiries = async () => {
+  const fetchEnquiries = async (): Promise<void> => {
     try {
       setLoading(true);
 
       // Get the session to fetch the tenant ID
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
 
-      if (!session) {
+      if (sessionError || !sessionData?.session) {
         console.error('No session found. Redirecting to auth.');
         window.location.href = '/auth';
         return;
@@ -26,7 +45,7 @@ export default function EnquiryListPage() {
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('tenant_id')
-        .eq('id', session.user.id)
+        .eq('id', sessionData.session.user.id)
         .single();
 
       if (profileError || !profile) {
@@ -57,9 +76,9 @@ export default function EnquiryListPage() {
 
       setEnquiries(enquiryData || []);
       console.log('Fetched enquiries:', enquiryData);
-    } catch (err) {
-      console.error('Error in fetchEnquiries:', err.message);
-      setError(err.message);
+    } catch (err: unknown) {
+      console.error('Error in fetchEnquiries:', (err as Error).message);
+      setError((err as Error).message);
     } finally {
       setLoading(false);
     }
@@ -92,10 +111,10 @@ export default function EnquiryListPage() {
                 <strong>Message:</strong> {enquiry.message || 'No message provided.'}
               </p>
               <p>
-                <strong>Media:</strong> {enquiry.media?.name || 'N/A'} ({enquiry.media?.type || 'N/A'})
+                <strong>Media:</strong> {enquiry.media[0]?.name || 'N/A'} ({enquiry.media[0]?.type || 'N/A'})
               </p>
               <p>
-                <strong>Price:</strong> ${enquiry.media?.price || 'N/A'}/day
+                <strong>Price:</strong> ${enquiry.media[0]?.price || 'N/A'}/day
               </p>
               <p>
                 <strong>Created At:</strong> {new Date(enquiry.created_at).toLocaleString()}

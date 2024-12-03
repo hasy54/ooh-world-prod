@@ -3,13 +3,27 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/services/supabaseClient';
 import FloatingSidebar from '@/components/ui/FloatingSidebar';
+import Image from 'next/image';
+
+interface MediaImage {
+  image_url: string;
+}
+
+interface MediaItem {
+  id: number;
+  name: string;
+  type: string;
+  location: string;
+  price: number;
+  availability: boolean;
+  media_images: MediaImage[];
+}
 
 export default function MediaPage() {
-  const [media, setMedia] = useState([]); // Media list
-  const [loading, setLoading] = useState(true); // Loading state
-  const [error, setError] = useState(''); // Error messages
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Sidebar state
-  const [uploadError, setUploadError] = useState(''); // Error for image upload
+  const [media, setMedia] = useState<MediaItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [newMedia, setNewMedia] = useState({
     name: '',
@@ -18,16 +32,14 @@ export default function MediaPage() {
     price: '',
     availability: true,
   });
-  const [newImages, setNewImages] = useState<File[]>([]); // Images for upload
+  const [newImages, setNewImages] = useState<File[]>([]);
 
-  // Fetch media items for the tenant
   const fetchMedia = async () => {
     try {
       setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: sessionData } = await supabase.auth.getSession();
 
-      if (!session) {
-        console.error('No session found. Redirecting to auth.');
+      if (!sessionData?.session) {
         window.location.href = '/auth';
         return;
       }
@@ -35,15 +47,15 @@ export default function MediaPage() {
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('tenant_id')
-        .eq('id', session.user.id)
+        .eq('id', sessionData.session.user.id)
         .single();
 
       if (profileError || !profile) {
-        console.error('Error fetching profile:', profileError);
-        throw new Error('Unable to fetch user profile');
+        setError('Unable to fetch user profile');
+        return;
       }
 
-      const { data: mediaData, error: mediaError } = await supabase
+      const { data: mediaData } = await supabase
         .from('media')
         .select(`
           *,
@@ -51,29 +63,19 @@ export default function MediaPage() {
         `)
         .eq('tenant_id', profile.tenant_id);
 
-      if (mediaError) {
-        console.error('Error fetching media:', mediaError);
-        throw new Error('Unable to fetch media');
-      }
-
       setMedia(mediaData || []);
-      console.log('Fetched media:', mediaData);
-    } catch (err) {
-      console.error('Error in fetchMedia:', err.message);
-      setError(err.message);
+    } catch {
+      setError('Error fetching media');
     } finally {
       setLoading(false);
     }
   };
 
-  // Add new media with image uploads
   const handleAddMedia = async () => {
     try {
-      setUploadError('');
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: sessionData } = await supabase.auth.getSession();
 
-      if (!session) {
-        console.error('No session found. Redirecting to auth.');
+      if (!sessionData?.session) {
         window.location.href = '/auth';
         return;
       }
@@ -81,81 +83,44 @@ export default function MediaPage() {
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('tenant_id')
-        .eq('id', session.user.id)
+        .eq('id', sessionData.session.user.id)
         .single();
 
       if (profileError || !profile) {
-        console.error('Error fetching profile:', profileError);
-        throw new Error('Unable to fetch user profile');
+        setError('Unable to fetch user profile');
+        return;
       }
 
-      // Insert new media record
-      const { data: insertedMedia, error: insertError } = await supabase
+      const { data: insertedMedia } = await supabase
         .from('media')
-        .insert({
-          ...newMedia,
-          tenant_id: profile.tenant_id,
-        })
+        .insert({ ...newMedia, tenant_id: profile.tenant_id })
         .select()
         .single();
 
-      if (insertError) {
-        console.error('Error inserting media:', insertError);
-        throw new Error('Failed to insert media');
-      }
-
-      console.log('Inserted media:', insertedMedia);
-
-      // Upload images
       for (const image of newImages) {
         const filePath = `${Date.now()}_${image.name.replace(/\s+/g, '_')}`;
-        console.log('Uploading image with filePath:', filePath);
+        await supabase.storage.from('media-images').upload(filePath, image);
 
-        const { error: uploadError } = await supabase.storage
-          .from('media-images')
-          .upload(filePath, image);
-
-        if (uploadError) {
-          console.error('Error uploading image:', uploadError);
-          throw new Error('Failed to upload image');
-        }
-
-        // Get the public URL
-        const { data: publicUrlData, error: publicUrlError } = supabase.storage
+        const { data: publicUrlData } = supabase.storage
           .from('media-images')
           .getPublicUrl(filePath);
 
-        if (publicUrlError || !publicUrlData) {
-          console.error('Error fetching public URL:', publicUrlError);
+        if (!publicUrlData || !publicUrlData.publicUrl) {
           throw new Error('Failed to retrieve image public URL');
         }
 
-        console.log('Image uploaded. Public URL:', publicUrlData.publicUrl);
-
-        // Insert image URL into database
-        const { error: insertImageError } = await supabase.from('media_images').insert({
+        await supabase.from('media_images').insert({
           media_id: insertedMedia.id,
           image_url: publicUrlData.publicUrl,
         });
-
-        if (insertImageError) {
-          console.error('Error inserting image URL:', insertImageError);
-          throw new Error('Failed to save image URL in database');
-        }
-
-        console.log('Image URL inserted into database.');
       }
 
-      console.log('All images uploaded successfully.');
-
-      // Reset form and refresh data
       setIsSidebarOpen(false);
       setNewMedia({ name: '', type: '', location: '', price: '', availability: true });
       setNewImages([]);
       fetchMedia();
-    } catch (err) {
-      console.error('Error in handleAddMedia:', err.message);
-      setUploadError(err.message);
+    } catch {
+      setError('Error adding media');
     }
   };
 
@@ -186,10 +151,12 @@ export default function MediaPage() {
               <h3 className="text-lg font-semibold">Images</h3>
               <div className="flex space-x-4">
                 {item.media_images?.map((img, idx) => (
-                  <img
+                  <Image
                     key={idx}
                     src={img.image_url}
                     alt={`Media ${item.name}`}
+                    width={128}
+                    height={128}
                     className="w-32 h-32 object-cover rounded"
                   />
                 ))}
@@ -198,48 +165,21 @@ export default function MediaPage() {
           </li>
         ))}
       </ul>
-
-      {uploadError && <div className="text-red-500">{uploadError}</div>}
-
       <FloatingSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)}>
         <h2 className="text-xl font-bold mb-4">Add New Media</h2>
-        <div className="space-y-4">
-          <input
-            type="text"
-            placeholder="Name"
-            value={newMedia.name}
-            onChange={(e) => setNewMedia({ ...newMedia, name: e.target.value })}
-            className="w-full px-4 py-2 border rounded"
-          />
-          <input
-            type="text"
-            placeholder="Type"
-            value={newMedia.type}
-            onChange={(e) => setNewMedia({ ...newMedia, type: e.target.value })}
-            className="w-full px-4 py-2 border rounded"
-          />
-          <input
-            type="number"
-            placeholder="Price"
-            value={newMedia.price}
-            onChange={(e) => setNewMedia({ ...newMedia, price: e.target.value })}
-            className="w-full px-4 py-2 border rounded"
-          />
-          <div>
-            <label>Upload Images</label>
-            <input
-              type="file"
-              multiple
-              onChange={(e) => setNewImages(Array.from(e.target.files || []))}
-            />
-          </div>
-          <button
-            onClick={handleAddMedia}
-            className="px-4 py-2 bg-blue-500 text-white rounded-md w-full hover:bg-blue-600"
-          >
-            Add Media
-          </button>
-        </div>
+        <input
+          type="text"
+          placeholder="Name"
+          value={newMedia.name}
+          onChange={(e) => setNewMedia({ ...newMedia, name: e.target.value })}
+          className="w-full px-4 py-2 border rounded"
+        />
+        <button
+          onClick={handleAddMedia}
+          className="px-4 py-2 bg-blue-500 text-white rounded-md w-full hover:bg-blue-600"
+        >
+          Add Media
+        </button>
       </FloatingSidebar>
     </div>
   );

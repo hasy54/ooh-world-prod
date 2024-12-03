@@ -1,117 +1,73 @@
-'use client'
+// src/components/PublicMediaPage.tsx
 
-import { useState, useEffect } from 'react'
-import { supabase } from '@/services/supabaseClient'
-import FloatingSidebar from '@/components/ui/FloatingSidebar'
+'use client';
 
-export default function MediaPage() {
-  const [media, setMedia] = useState([])
-  const [tenantId, setTenantId] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [newEnquiry, setNewEnquiry] = useState({
-    client_name: '',
-    client_email: '',
-    client_phone: '',
-    media_id: '',
-    message: '',
-  })
-  const [enquirySuccess, setEnquirySuccess] = useState(false)
+import React, { useEffect, useState } from 'react';
+import { supabase } from '@/services/supabaseClient';
 
-  const fetchMedia = async () => {
+interface MediaImage {
+  image_url: string;
+}
+
+interface MediaItem {
+  id: number;
+  name: string;
+  type: string;
+  location: string;
+  price: number;
+  media_images?: MediaImage[];
+}
+
+interface PublicMediaPageProps {
+  params: {
+    tenantId: string;
+  };
+}
+
+const PublicMediaPage: React.FC<PublicMediaPageProps> = ({ params }) => {
+  const { tenantId } = params;
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>('');
+
+  const fetchMediaItems = async () => {
     try {
-      setLoading(true)
-      const { data: { session } } = await supabase.auth.getSession()
-
-      if (!session) {
-        console.error('No session found. Redirecting to auth.')
-        window.location.href = '/auth'
-        return
-      }
-
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('tenant_id')
-        .eq('id', session.user.id)
-        .single()
-
-      if (profileError || !profile) {
-        console.error('Error fetching profile:', profileError)
-        throw new Error('Unable to fetch user profile')
-      }
-
-      setTenantId(profile.tenant_id)
-
+      setLoading(true);
+      // Fetch media items from Supabase or your data source
       const { data: mediaData, error: mediaError } = await supabase
         .from('media')
         .select(`
           *,
           media_images (image_url)
         `)
-        .eq('tenant_id', profile.tenant_id)
+        .eq('tenant_id', tenantId);
 
       if (mediaError) {
-        console.error('Error fetching media:', mediaError)
-        throw new Error('Unable to fetch media')
+        console.error('Error fetching media:', mediaError);
+        throw new Error('Unable to fetch media');
       }
 
-      setMedia(mediaData || [])
-      console.log('Fetched media:', mediaData)
-    } catch (err) {
-      console.error('Error in fetchMedia:', err.message)
-      setError(err.message)
+      setMediaItems((mediaData as MediaItem[]) || []);
+    } catch (err: any) {
+      console.error('Error in fetchMediaItems:', err.message);
+      setError(err.message);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
-
-  const handleEnquiry = async () => {
-    try {
-      if (!newEnquiry.client_name || !newEnquiry.client_email || !newEnquiry.media_id) {
-        throw new Error('Please fill in all required fields.')
-      }
-
-      const { error: enquiryError } = await supabase.from('inquiries').insert({
-        tenant_id: tenantId,
-        media_id: newEnquiry.media_id,
-        client_name: newEnquiry.client_name,
-        client_email: newEnquiry.client_email,
-        client_phone: newEnquiry.client_phone,
-        message: newEnquiry.message,
-      })
-
-      if (enquiryError) {
-        console.error('Error sending enquiry:', enquiryError)
-        throw new Error('Failed to send enquiry')
-      }
-
-      setNewEnquiry({
-        client_name: '',
-        client_email: '',
-        client_phone: '',
-        media_id: '',
-        message: '',
-      })
-      setEnquirySuccess(true)
-    } catch (err) {
-      console.error('Error in handleEnquiry:', err.message)
-      alert(err.message || 'Failed to send enquiry.')
-    }
-  }
+  };
 
   useEffect(() => {
-    fetchMedia()
-  }, [])
+    fetchMediaItems();
+  }, [tenantId]);
 
-  if (loading) return <div>Loading...</div>
-  if (error) return <div className="text-red-500">{error}</div>
+  if (loading) return <div>Loading media items...</div>;
+  if (error) return <div className="text-red-500">{error}</div>;
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-4">Media</h1>
+      <h1 className="text-2xl font-bold mb-4">Media for Tenant {tenantId}</h1>
       <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {media.map((item) => (
+        {mediaItems.map((item) => (
           <li key={item.id} className="p-4 bg-white shadow rounded">
             <h2 className="text-xl font-semibold">{item.name}</h2>
             <p>Type: {item.type}</p>
@@ -130,61 +86,12 @@ export default function MediaPage() {
                 ))}
               </div>
             </div>
-            <button
-              onClick={() => {
-                setNewEnquiry((prev) => ({ ...prev, media_id: item.id }))
-                setIsSidebarOpen(true)
-              }}
-              className="mt-2 px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
-            >
-              Enquire Now
-            </button>
+            {/* You can add more content or actions here */}
           </li>
         ))}
       </ul>
-
-      <FloatingSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)}>
-        <h2 className="text-xl font-bold mb-4">Enquire About Media</h2>
-        {enquirySuccess && (
-          <div className="text-green-500 mb-4">Enquiry sent successfully!</div>
-        )}
-        <div className="space-y-4">
-          <input
-            type="text"
-            placeholder="Your Name"
-            value={newEnquiry.client_name}
-            onChange={(e) => setNewEnquiry({ ...newEnquiry, client_name: e.target.value })}
-            className="w-full px-4 py-2 border rounded"
-          />
-          <input
-            type="email"
-            placeholder="Your Email"
-            value={newEnquiry.client_email}
-            onChange={(e) => setNewEnquiry({ ...newEnquiry, client_email: e.target.value })}
-            className="w-full px-4 py-2 border rounded"
-          />
-          <input
-            type="text"
-            placeholder="Your Phone"
-            value={newEnquiry.client_phone}
-            onChange={(e) => setNewEnquiry({ ...newEnquiry, client_phone: e.target.value })}
-            className="w-full px-4 py-2 border rounded"
-          />
-          <textarea
-            placeholder="Your Message"
-            value={newEnquiry.message}
-            onChange={(e) => setNewEnquiry({ ...newEnquiry, message: e.target.value })}
-            className="w-full px-4 py-2 border rounded"
-          />
-          <button
-            onClick={handleEnquiry}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
-          >
-            Send Enquiry
-          </button>
-        </div>
-      </FloatingSidebar>
     </div>
-  )
-}
+  );
+};
 
+export default PublicMediaPage;

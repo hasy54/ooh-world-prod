@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/services/supabaseClient';
 import FloatingSidebar from '@/components/ui/FloatingSidebar';
+import { useMemo } from 'react';
 
 // Define interfaces for your data
 interface Booking {
@@ -46,12 +47,13 @@ export default function BookingsPage() {
   }); // New booking form data
   const [estimatedCost, setEstimatedCost] = useState(0); // Estimated cost
 
-  const intervals = [
-    { label: '15 Days', days: 15 },
-    { label: '30 Days', days: 30 },
-    { label: '2 Months', days: 60 },
-    { label: '3 Months', days: 90 },
-  ]; // Predefined booking intervals
+// Use useMemo for the intervals array
+const intervals = useMemo(() => [
+  { label: '15 Days', days: 15 },
+  { label: '30 Days', days: 30 },
+  { label: '2 Months', days: 60 },
+  { label: '3 Months', days: 90 },
+], []);
 
   // Fetch all bookings and media
   const fetchBookingsAndMedia = async () => {

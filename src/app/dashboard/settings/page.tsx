@@ -5,24 +5,24 @@ import { supabase } from '@/services/supabaseClient';
 
 export default function SettingsPage() {
   const [tenantDetails, setTenantDetails] = useState({
+    id: '',
     name: '',
     logo_url: '',
     contact_email: '',
     contact_phone: '',
     contact_address: '',
-  }); // Tenant details state
-  const [loading, setLoading] = useState(false); // Loading state
-  const [error, setError] = useState(''); // Error state
-  const [successMessage, setSuccessMessage] = useState(''); // Success state
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
 
-  // Fetch tenant details
   const fetchTenantDetails = async () => {
     try {
       setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!session) {
-        console.error('No session found. Redirecting to auth.');
         window.location.href = '/auth';
         return;
       }
@@ -34,7 +34,6 @@ export default function SettingsPage() {
         .single();
 
       if (profileError || !profile) {
-        console.error('Error fetching profile:', profileError);
         throw new Error('Unable to fetch user profile');
       }
 
@@ -45,79 +44,50 @@ export default function SettingsPage() {
         .single();
 
       if (tenantError || !tenantData) {
-        console.error('Error fetching tenant details:', tenantError);
         throw new Error('Unable to fetch tenant details');
       }
 
       setTenantDetails(tenantData);
     } catch (err) {
-      console.error('Error in fetchTenantDetails:', err.message);
-      setError(err.message);
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An unexpected error occurred.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Update tenant details
   const handleUpdateDetails = async () => {
     try {
       setLoading(true);
-      setError('');
-      setSuccessMessage('');
+      setError(null);
+      setSuccessMessage(null);
 
-// Upload images
-for (const image of newImages) {
-    try {
-      // Generate unique file path for the image
-      const filePath = `${Date.now()}_${image.name.replace(/\s+/g, '_')}`;
-      console.log('Uploading image with filePath:', filePath);
-  
-      // Upload the image to the specified storage bucket
-      const { error: uploadError } = await supabase.storage
-        .from('media-images') // Change to your bucket name if different
-        .upload(filePath, image);
-  
-      if (uploadError) {
-        console.error('Error uploading image:', uploadError);
-        throw new Error(`Failed to upload image: ${image.name}`);
-      }
-  
-      console.log(`Image uploaded successfully: ${filePath}`);
-  
-      // Fetch the public URL for the uploaded image
-      const { data: publicUrlData, error: publicUrlError } = supabase.storage
-        .from('media-images') // Change to your bucket name if different
-        .getPublicUrl(filePath);
-  
-      if (publicUrlError || !publicUrlData) {
-        console.error('Error fetching public URL:', publicUrlError);
-        throw new Error('Failed to retrieve public URL for the uploaded image');
-      }
-  
-      console.log('Image Public URL:', publicUrlData.publicUrl);
-  
-      // Insert the image's public URL into the database
-      const { error: insertImageError } = await supabase.from('media_images').insert({
-        media_id: insertedMedia.id, // Ensure `insertedMedia.id` is properly set
-        image_url: publicUrlData.publicUrl,
-      });
-  
-      if (insertImageError) {
-        console.error('Error inserting image URL into database:', insertImageError);
-        throw new Error(`Failed to save image URL for ${filePath} in the database`);
-      }
-  
-      console.log(`Image URL inserted into database successfully for: ${filePath}`);
-    } catch (err) {
-      console.error('Error processing image upload:', err.message);
-      alert(`Error uploading image: ${err.message}`);
-    }
-  }
-  
-  console.log('All images processed successfully.');
-  
+      let logoUrl = tenantDetails.logo_url;
 
-      // Update tenant details
+      if (logoFile) {
+        const filePath = `logos/${Date.now()}_${logoFile.name.replace(/\s+/g, '_')}`;
+        const { error: uploadError } = await supabase.storage
+          .from('media-images')
+          .upload(filePath, logoFile);
+
+        if (uploadError) {
+          throw new Error('Failed to upload logo');
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from('media-images')
+          .getPublicUrl(filePath);
+
+        if (!publicUrlData || !publicUrlData.publicUrl) {
+          throw new Error('Failed to retrieve public URL for the uploaded image');
+        }
+
+        logoUrl = publicUrlData.publicUrl;
+      }
+
       const { error: updateError } = await supabase
         .from('tenants')
         .update({
@@ -130,15 +100,17 @@ for (const image of newImages) {
         .eq('id', tenantDetails.id);
 
       if (updateError) {
-        console.error('Error updating tenant details:', updateError);
         throw new Error('Failed to update tenant details');
       }
 
       setSuccessMessage('Tenant details updated successfully!');
-      fetchTenantDetails(); // Refresh data
+      fetchTenantDetails();
     } catch (err) {
-      console.error('Error in handleUpdateDetails:', err.message);
-      setError(err.message);
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An unexpected error occurred.');
+      }
     } finally {
       setLoading(false);
     }
@@ -149,28 +121,21 @@ for (const image of newImages) {
   }, []);
 
   if (loading) return <div>Loading...</div>;
-  if (error) return <div className="text-red-500">{error}</div>;
 
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">Tenant Settings</h1>
 
-      {successMessage && (
-        <div className="text-green-500 mb-4">{successMessage}</div>
-      )}
-      {error && (
-        <div className="text-red-500 mb-4">{error}</div>
-      )}
+      {successMessage && <div className="text-green-500 mb-4">{successMessage}</div>}
+      {error && <div className="text-red-500 mb-4">{error}</div>}
 
       <form className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700">Tenant Name</label>
           <input
             type="text"
-            value={tenantDetails.name || ''}
-            onChange={(e) =>
-              setTenantDetails({ ...tenantDetails, name: e.target.value })
-            }
+            value={tenantDetails.name}
+            onChange={(e) => setTenantDetails({ ...tenantDetails, name: e.target.value })}
             className="w-full px-4 py-2 border rounded"
           />
         </div>
@@ -179,7 +144,7 @@ for (const image of newImages) {
           <label className="block text-sm font-medium text-gray-700">Contact Email</label>
           <input
             type="email"
-            value={tenantDetails.contact_email || ''}
+            value={tenantDetails.contact_email}
             onChange={(e) =>
               setTenantDetails({ ...tenantDetails, contact_email: e.target.value })
             }
@@ -191,7 +156,7 @@ for (const image of newImages) {
           <label className="block text-sm font-medium text-gray-700">Contact Phone</label>
           <input
             type="text"
-            value={tenantDetails.contact_phone || ''}
+            value={tenantDetails.contact_phone}
             onChange={(e) =>
               setTenantDetails({ ...tenantDetails, contact_phone: e.target.value })
             }
@@ -202,7 +167,7 @@ for (const image of newImages) {
         <div>
           <label className="block text-sm font-medium text-gray-700">Contact Address</label>
           <textarea
-            value={tenantDetails.contact_address || ''}
+            value={tenantDetails.contact_address}
             onChange={(e) =>
               setTenantDetails({ ...tenantDetails, contact_address: e.target.value })
             }

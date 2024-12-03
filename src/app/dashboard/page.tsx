@@ -3,24 +3,22 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/services/supabaseClient';
 
-export default function Dashboard() {
-  const [agencyName, setAgencyName] = useState('');
-  const [error, setError] = useState('');
+export default function DashboardPage() {
+  const [agencyName, setAgencyName] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchUserAndAgency = async () => {
+    const fetchAgencyName = async () => {
       try {
-        // Get the current session
         const {
           data: { session },
         } = await supabase.auth.getSession();
 
         if (!session) {
-          window.location.href = '/auth'; // Redirect to login if not signed in
+          window.location.href = '/auth';
           return;
         }
 
-        // Fetch the user's profile
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('tenant_id')
@@ -28,10 +26,9 @@ export default function Dashboard() {
           .single();
 
         if (profileError || !profile) {
-          throw new Error('Unable to fetch profile');
+          throw new Error('Unable to fetch user profile');
         }
 
-        // Fetch the agency name
         const { data: tenant, error: tenantError } = await supabase
           .from('tenants')
           .select('name')
@@ -39,43 +36,34 @@ export default function Dashboard() {
           .single();
 
         if (tenantError || !tenant) {
-          throw new Error('Unable to fetch agency name');
+          throw new Error('Unable to fetch tenant details');
         }
 
         setAgencyName(tenant.name);
       } catch (err) {
-        setError(err.message);
+        if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError('An unexpected error occurred');
+        }
       }
     };
 
-    fetchUserAndAgency();
+    fetchAgencyName();
   }, []);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    window.location.href = '/auth'; // Redirect to login page
-  };
+  if (error) {
+    return <div className="text-red-500">Error: {error}</div>;
+  }
+
+  if (!agencyName) {
+    return <div>Loading...</div>;
+  }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen">
-      <div className="w-[400px] p-6 bg-white shadow-md rounded-md">
-        <h1 className="text-2xl font-semibold text-center mb-4">Dashboard</h1>
-        {error ? (
-          <p className="text-red-500 text-center">{error}</p>
-        ) : (
-          <>
-            <p className="text-lg text-center">
-              Welcome to {agencyName || 'your agency'}!
-            </p>
-            <button
-              onClick={handleLogout}
-              className="mt-4 px-4 py-2 bg-red-500 text-white rounded-md w-full"
-            >
-              Log Out
-            </button>
-          </>
-        )}
-      </div>
+    <div>
+      <h1 className="text-2xl font-bold">Welcome to {agencyName} Dashboard</h1>
+      <p>Manage your media, bookings, and more!</p>
     </div>
   );
 }
