@@ -86,3 +86,53 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+@email-page {
+  display: grid;
+  grid-template-columns: 25% 50% 25%;
+  height: 100vh;
+  font-family: Arial, sans-serif;
+}
+
+@email-sidebar {
+  background-color: #f8f9fa;
+  border-right: 1px solid #ddd;
+  padding: 15px;
+  overflow-y: auto;
+}
+
+@email-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@email-item {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+email-item:hover {
+  background-color: #e9ecef;
+}
+
+.email-content {
+  padding: 20px;
+}
+
+@email-placeholder {
+  text-align: center;
+  color: #666;
+  font-size: 18px;
+  margin-top: 50px;
+}
+
+@email-coming-soon {
+  background-color: #f1f3f5;
+  padding: 20px;
+  text-align: center;
+}
+

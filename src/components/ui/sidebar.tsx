@@ -1,7 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/services/supabaseClient';
+import { supabase } from '@/lib/supabase';
 
 const Sidebar = ({ tenantName }: { tenantName: string }) => {
   const navigation = [
