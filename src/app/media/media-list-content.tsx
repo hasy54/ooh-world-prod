@@ -1,27 +1,87 @@
+// src/app/media/media-list-content.tsx
+
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
-import { columns } from "@/components/columns"
-import { DataTable } from "@/components/ui/data-table"
-import { useMediaData } from '@/hooks/useMediaData';
+import { supabase } from '@/lib/supabase';
+import { columns } from "@/components/columns";
+import { DataTable } from "@/components/ui/data-table";
 import { Stats } from '@/components/stats';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MediaDetailsModal } from '@/components/media-details-modal';
 import { BookingModal } from '@/components/booking/booking-modal';
-import { Media } from '@/hooks/useMediaData';
 import { Button } from '@/components/ui/button';
+import { Media } from '@/types/media'; // Import the centralized Media type
 
-export default function ListingPage() {
-  const { media, loading, error } = useMediaData();
+export default function MediaList() {
+  const { userId } = useAuth();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState('available');
+  const [media, setMedia] = useState<Media[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [selectedMedia, setSelectedMedia] = useState<Media | null>(null);
   const [showBooking, setShowBooking] = useState(false);
 
+  const fetchMedia = async () => {
+    if (!userId) {
+      setError('User is not logged in.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('clerk_user_id', userId)
+        .single();
+
+      if (userError || !user) {
+        console.error('Error fetching user:', userError);
+        setError('Unable to fetch user details.');
+        return;
+      }
+
+      const userIdFromDB = user.id;
+
+      const { data: mediaData, error: mediaError } = await supabase
+        .from('media')
+        .select('*')
+        .eq('user_id', userIdFromDB);
+
+      if (mediaError) {
+        console.error('Error fetching media:', mediaError);
+        setError('Unable to fetch media.');
+        return;
+      }
+
+      setMedia(mediaData || []);
+    } catch (err) {
+      console.error('Unexpected error fetching media:', err);
+      setError('An unexpected error occurred.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMedia();
+  }, [userId]);
+
   const handleBookingSubmit = async (data: any) => {
-    console.log('Booking submitted:', data)
-    setShowBooking(false)
-  }
+    console.log('Booking submitted:', data);
+    setShowBooking(false);
+  };
+
+  const filteredMedia = media.filter(m => 
+    activeTab === 'available' ? m.availability : !m.availability
+  );
 
   if (loading) {
     return <div className="container mx-auto p-8" role="status" aria-live="polite">Loading...</div>;
@@ -31,17 +91,18 @@ export default function ListingPage() {
     return <div className="container mx-auto p-8 text-red-500" role="alert">{error}</div>;
   }
 
-  const filteredMedia = media.filter(m => 
-    activeTab === 'available' ? m.availability : !m.availability
-  );
-
   return (
     <div className="container mx-auto p-4 md:p-8">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
-        <h1 className="text-2xl font-semibold mb-4 md:mb-0">All Media Listings</h1>
-        <Button onClick={() => setShowBooking(true)}>
-          <Plus className="mr-2 h-4 w-4" /> New Booking
-        </Button>
+        <h1 className="text-2xl font-semibold mb-4 md:mb-0">Your Media Listings</h1>
+        <div className="space-y-2 md:space-y-0 md:space-x-2">
+          <Button onClick={() => setShowBooking(true)} className="w-full md:w-auto mb-2 md:mb-0">
+            <Plus className="mr-2 h-4 w-4" /> New Booking
+          </Button>
+          <Button onClick={() => router.push('/media/create')} className="w-full md:w-auto">
+            <Plus className="mr-2 h-4 w-4" /> Add Media
+          </Button>
+        </div>
       </div>
 
       <Stats media={media} />
@@ -82,11 +143,10 @@ export default function ListingPage() {
           media={selectedMedia}
           onClose={() => setSelectedMedia(null)}
           onUpdate={(updatedMedia) => {
-            // This function needs to be implemented to update the media state
-            console.log('Media updated:', updatedMedia);
+            setMedia(media.map(m => m.id === updatedMedia.id ? updatedMedia : m));
             setSelectedMedia(null);
           }}
-          isMyMedia={false}
+          isMyMedia={true}
         />
       )}
 
@@ -99,4 +159,3 @@ export default function ListingPage() {
     </div>
   );
 }
-

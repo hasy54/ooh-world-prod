@@ -1,14 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { useAuth } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Loader2, Upload } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function AddMedia() {
-  const { userId } = useAuth(); // Clerk User ID
   const router = useRouter();
 
   const [form, setForm] = useState({
@@ -18,52 +20,70 @@ export default function AddMedia() {
     price: '',
     availability: true,
   });
+  const [pictures, setPictures] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async () => {
-    if (!userId) {
-      setError('User is not logged in.');
-      return;
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setPictures(Array.from(e.target.files));
     }
+  };
 
+  const uploadPictures = async (mediaId: string) => {
+    const uploadPromises = pictures.map(async (file) => {
+      const { data, error } = await supabase.storage
+        .from('media-pictures')
+        .upload(`${mediaId}/${file.name}`, file);
+
+      if (error) throw error;
+      return data.path;
+    });
+
+    return Promise.all(uploadPromises);
+  };
+
+  const handleSubmit = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Fetch the Supabase user ID using Clerk User ID
-      const { data: user, error: userError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('clerk_user_id', userId)
+      // Insert the new media
+      const { data: newMedia, error: mediaError } = await supabase
+        .from('media')
+        .insert({
+          name: form.name,
+          location: form.location,
+          type: form.type,
+          price: Number(form.price),
+          availability: form.availability,
+        })
+        .select()
         .single();
 
-      if (userError || !user) {
-        console.error('Error fetching user ID:', userError);
-        setError('Unable to fetch user details.');
-        return;
-      }
-
-      const userIdFromDB = user.id;
-
-      // Insert the new media
-      const { error: mediaError } = await supabase.from('media').insert({
-        name: form.name,
-        location: form.location,
-        type: form.type,
-        price: Number(form.price),
-        availability: form.availability,
-        user_id: userIdFromDB,
-      });
-
-      if (mediaError) {
+      if (mediaError || !newMedia) {
         console.error('Error adding media:', mediaError);
         setError('Failed to create new media.');
         return;
       }
 
+      // Upload pictures if any
+      if (pictures.length > 0) {
+        const picturePaths = await uploadPictures(newMedia.id);
+        
+        // Update media with picture paths
+        const { error: updateError } = await supabase
+          .from('media')
+          .update({ photos: picturePaths })
+          .eq('id', newMedia.id);
+
+        if (updateError) {
+          console.error('Error updating media with pictures:', updateError);
+        }
+      }
+
       // Navigate back to the media list
-      router.push('/media'); // Replace with your media list route
+      router.push('/media');
     } catch (err) {
       console.error('Unexpected error:', err);
       setError('An unexpected error occurred.');
@@ -73,48 +93,97 @@ export default function AddMedia() {
   };
 
   return (
-    <div className="p-6 max-w-lg mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Add New Media</h1>
-      <div className="space-y-4">
-        <Input
-          placeholder="Name"
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-        />
-        <Input
-          placeholder="Location"
-          value={form.location}
-          onChange={(e) => setForm({ ...form, location: e.target.value })}
-        />
-        <Input
-          placeholder="Type"
-          value={form.type}
-          onChange={(e) => setForm({ ...form, type: e.target.value })}
-        />
-        <Input
-          type="number"
-          placeholder="Price"
-          value={form.price}
-          onChange={(e) => setForm({ ...form, price: e.target.value })}
-        />
-        <label className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            checked={form.availability}
-            onChange={(e) => setForm({ ...form, availability: e.target.checked })}
-          />
-          <span>Available</span>
-        </label>
-        {error && <p className="text-red-500">{error}</p>}
-        <div className="flex justify-end space-x-2">
-          <Button variant="ghost" onClick={() => router.push('/media-list')}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={loading}>
-            {loading ? 'Creating...' : 'Create Media'}
-          </Button>
-        </div>
-      </div>
+    <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8">
+      <Card>
+        <CardHeader>
+          <CardTitle>Add New Media</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                placeholder="Name"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="location">Location</Label>
+              <Input
+                id="location"
+                placeholder="Location"
+                value={form.location}
+                onChange={(e) => setForm({ ...form, location: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="type">Type</Label>
+              <Input
+                id="type"
+                placeholder="Type"
+                value={form.type}
+                onChange={(e) => setForm({ ...form, type: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="price">Price</Label>
+              <Input
+                id="price"
+                type="number"
+                placeholder="Price"
+                value={form.price}
+                onChange={(e) => setForm({ ...form, price: e.target.value })}
+                required
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="availability"
+                checked={form.availability}
+                onCheckedChange={(checked) => 
+                  setForm({ ...form, availability: checked as boolean })
+                }
+              />
+              <Label htmlFor="availability">Available</Label>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pictures">Upload Pictures</Label>
+              <Input
+                id="pictures"
+                type="file"
+                multiple
+                onChange={handleFileChange}
+                className="mt-1"
+              />
+            </div>
+            {error && <p className="text-red-500">{error}</p>}
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => router.push('/media')}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Create Media
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
+
