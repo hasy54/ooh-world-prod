@@ -20,7 +20,7 @@ export default function BookingFormModal({
       console.log('Selected Media:', selectedMedia);
       console.log('Start Date:', startDate, 'End Date:', endDate);
   
-      const response = await fetch('api/bookings', {
+      const response = await fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

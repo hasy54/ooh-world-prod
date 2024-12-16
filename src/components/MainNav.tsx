@@ -15,10 +15,12 @@ export function MainNav() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navItems = [
+    //{ href: '/home', label: 'Home' }, 
     { href: '/booking', label: 'Booking' },
     { href: '/media', label: 'My Media' },
     { href: '/mail', label: 'Mail' },
     { href: '/listing', label: 'Listings' },
+    { href: '/media-planner', label: 'Planner' },
   ];
 
   const NavLinks = () => (
@@ -50,7 +52,7 @@ export function MainNav() {
             alt="OOH Logo"
             className="h-6 w-6 rounded-full"
           />
-          <span className="hidden font-bold sm:inline-block">OOH WORLD</span>
+
         </Link>
         <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
           <nav className="hidden md:flex items-center space-x-6">

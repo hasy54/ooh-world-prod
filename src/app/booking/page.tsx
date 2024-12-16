@@ -1,233 +1,289 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { useState, useEffect } from 'react';
+import { useMediaData } from '@/hooks/useMediaData';
+import { useUser } from '@clerk/nextjs';
+import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
-type Booking = {
-  id: string;
-  media: {
-    name: string;
+
+const BookPage = () => {
+  const { media, loading, error } = useMediaData();
+  const { user } = useUser();
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [notes, setNotes] = useState('');
+  const [selectedMedia, setSelectedMedia] = useState<{ id: string; price: number }[]>([]);
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [bookingHistory, setBookingHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState<boolean>(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+
+  const handleMediaSelection = (mediaItem: { id: string; price: number }) => {
+    setSelectedMedia((prev) =>
+      prev.find((item) => item.id === mediaItem.id)
+        ? prev.filter((item) => item.id !== mediaItem.id)
+        : [...prev, mediaItem]
+    );
   };
-  client_name: string;
-  start_date: string;
-  end_date: string;
-  total_price: number;
-  status: 'pending' | 'confirmed' | 'cancelled';
-  group_id?: string;
-};
 
-type Enquiry = {
-  id: string;
-  client_name: string;
-  client_email: string;
-  message: string;
-  created_at: string;
-  status: 'new' | 'in_progress' | 'resolved';
-};
+  const handlePreview = () => {
+    if (!user) {
+      alert('You must be logged in to proceed.');
+      return;
+    }
 
-type BookingStats = {
-  totalBookings: number;
-  pendingBookings: number;
-  confirmedBookings: number;
-  cancelledBookings: number;
-  totalRevenue: number;
-};
-
-export default function BookingPage() {
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
-  const [bookingStats, setBookingStats] = useState<BookingStats>({
-    totalBookings: 0,
-    pendingBookings: 0,
-    confirmedBookings: 0,
-    cancelledBookings: 0,
-    totalRevenue: 0,
-  });
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchBookings = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(`/api/bookings?status=${statusFilter}`);
-        const data = await res.json();
-        if (data.success) {
-          setBookings(data.bookings);
-          setBookingStats(data.stats);
-        }
-      } catch (error) {
-        console.error('Error fetching bookings:', error);
-      } finally {
-        setLoading(false);
-      }
+    const preview = {
+      clerk_user_id: user.id,
+      mediaIds: selectedMedia.map((item) => item.id),
+      startDate,
+      endDate,
+      notes,
     };
 
-    fetchBookings();
-  }, [statusFilter]);
+    setPreviewData(preview);
+  };
 
-  useEffect(() => {
-    const fetchEnquiries = async () => {
-      try {
-        const res = await fetch('/api/enquiries');
-        const data = await res.json();
-        if (data.success) {
-          setEnquiries(data.enquiries);
-        }
-      } catch (error) {
-        console.error('Error fetching enquiries:', error);
+  const handleSubmitToDatabase = async () => {
+    if (!previewData) {
+      alert('No data to submit. Please preview the data first.');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/bookings/add', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(previewData),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        alert(`Error: ${data.error}`);
+      } else {
+        alert('Enquiries created successfully!');
+        setPreviewData(null);
+        setSelectedMedia([]);
+        setStartDate('');
+        setEndDate('');
+        setNotes('');
+        fetchBookingHistory();
       }
-    };
-
-    fetchEnquiries();
-  }, []);
-
-  const getStatusBadge = (status: Booking['status'] | Enquiry['status']) => {
-    switch (status) {
-      case 'pending':
-      case 'new':
-        return <Badge variant="secondary">{status}</Badge>;
-      case 'confirmed':
-      case 'in_progress':
-        return <Badge variant="default">{status}</Badge>;
-      case 'cancelled':
-      case 'resolved':
-        return <Badge variant="destructive">{status}</Badge>;
-      default:
-        return <Badge>{status}</Badge>;
+    } catch (error) {
+      console.error('Error submitting data:', error);
+      alert('Error submitting data. Check the console for details.');
     }
   };
 
-  return (
-    <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8">
-      <h1 className="text-3xl font-bold mb-6">Bookings & Enquiries</h1>
+  const fetchBookingHistory = async () => {
+    if (!user) return;
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+    setHistoryLoading(true);
+    setHistoryError(null);
+
+    try {
+      const response = await fetch('/api/bookings/history', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ clerk_user_id: user.id }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch booking history.');
+      }
+
+      setBookingHistory(data.bookings);
+    } catch (err: any) {
+      setHistoryError(err.message || 'An error occurred.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  
+
+  useEffect(() => {
+    fetchBookingHistory();
+  }, [user]);
+
+  
+
+  return (
+    <div className="container mx-auto p-8">
+      <Card>
+        <CardHeader>
+          <CardTitle>Book Media</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Booking Form */}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium">Start Date</label>
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  placeholder="Start Date"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">End Date</label>
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  placeholder="End Date"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Notes</label>
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Enter any additional notes..."
+                />
+              </div>
+            </div>
+
+            {/* Media List */}
+            <div>
+              <h3 className="text-sm font-medium mb-2">Available Media</h3>
+              {loading ? (
+                <Skeleton className="h-64" />
+              ) : error ? (
+                <Alert variant="destructive">
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              ) : (
+                <div className="border rounded h-64 overflow-y-auto p-4">
+                  <ul className="space-y-2">
+                    {media.map((mediaItem) => (
+                      <li
+                        key={mediaItem.id}
+                        className="flex items-center justify-between py-2 border-b"
+                      >
+                        <div>
+                          <strong>Media ID:</strong> {mediaItem.id} <br />
+                          <strong>Price:</strong> ${mediaItem.price}
+                        </div>
+                        <Input
+                          type="checkbox"
+                          checked={selectedMedia.some((item) => item.id === mediaItem.id)}
+                          onChange={() => handleMediaSelection(mediaItem)}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="mt-4 flex justify-between">
+            <Button variant="secondary" onClick={handlePreview}>
+              Preview
+            </Button>
+            <Button variant="default" onClick={handleSubmitToDatabase}>
+              Submit Enquiry
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {previewData && (
+  <div className="mt-8">
+    <Card>
+      <CardHeader>
+        <CardTitle>Preview Data</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ul className="space-y-2">
+          <li>
+            <strong>User ID:</strong> {previewData.clerk_user_id}
+          </li>
+          <li>
+            <strong>Start Date:</strong> {previewData.startDate}
+          </li>
+          <li>
+            <strong>End Date:</strong> {previewData.endDate}
+          </li>
+          <li>
+            <strong>Notes:</strong> {previewData.notes || 'None'}
+          </li>
+          <li>
+            <strong>Selected Media:</strong>
+            <ul className="ml-4 list-disc">
+            {previewData.mediaIds.map((id: string, index: number) => (
+                <li key={index}>{id}</li>
+              ))}
+            </ul>
+          </li>
+        </ul>
+      </CardContent>
+    </Card>
+  </div>
+)}
+
+
+      {/* Booking History */}
+      <div className="mt-12">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Bookings</CardTitle>
+          <CardHeader>
+            <CardTitle>Booking History</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{bookingStats.totalBookings}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Bookings</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{bookingStats.pendingBookings}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Confirmed Bookings</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{bookingStats.confirmedBookings}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${bookingStats.totalRevenue.toFixed(2)}</div>
+            {historyLoading ? (
+              <Skeleton className="h-64" />
+            ) : historyError ? (
+              <Alert variant="destructive">
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{historyError}</AlertDescription>
+              </Alert>
+            ) : bookingHistory.length === 0 ? (
+              <div className="text-sm">You have no bookings yet.</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Media ID</TableHead>
+                    <TableHead>Start Date</TableHead>
+                    <TableHead>End Date</TableHead>
+                    <TableHead>Notes</TableHead>
+                    <TableHead>Created At</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {bookingHistory.map((booking) => (
+                    <TableRow key={booking.id}>
+                      <TableCell>{booking.media_id}</TableCell>
+                      <TableCell>{booking.start_date}</TableCell>
+                      <TableCell>{booking.end_date}</TableCell>
+                      <TableCell>{booking.notes || 'N/A'}</TableCell>
+                      <TableCell>
+                        {new Date(booking.created_at).toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>
-
-      <Tabs defaultValue="bookings" className="space-y-4">
-        <TabsList className="w-full sm:w-auto">
-          <TabsTrigger value="bookings" className="flex-1 sm:flex-none">Bookings</TabsTrigger>
-          <TabsTrigger value="enquiries" className="flex-1 sm:flex-none">Enquiries</TabsTrigger>
-        </TabsList>
-        <TabsContent value="bookings" className="space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
-            <h2 className="text-2xl font-semibold mb-2 sm:mb-0">Bookings</h2>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="confirmed">Confirmed</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {loading ? (
-            <p>Loading bookings...</p>
-          ) : bookings.length > 0 ? (
-            <ScrollArea className="h-[calc(100vh-400px)]">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Media Name</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Start Date</TableHead>
-                    <TableHead>End Date</TableHead>
-                    <TableHead>Total Price</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {bookings.map((booking) => (
-                    <TableRow key={booking.id}>
-                      <TableCell>{booking.media.name}</TableCell>
-                      <TableCell>{booking.client_name}</TableCell>
-                      <TableCell>{new Date(booking.start_date).toLocaleDateString()}</TableCell>
-                      <TableCell>{new Date(booking.end_date).toLocaleDateString()}</TableCell>
-                      <TableCell>${booking.total_price.toFixed(2)}</TableCell>
-                      <TableCell>{getStatusBadge(booking.status)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </ScrollArea>
-          ) : (
-            <p>No bookings available.</p>
-          )}
-        </TabsContent>
-        <TabsContent value="enquiries" className="space-y-4">
-          <h2 className="text-2xl font-semibold">Enquiries</h2>
-          {enquiries.length > 0 ? (
-            <ScrollArea className="h-[calc(100vh-400px)]">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Client Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Message</TableHead>
-                    <TableHead>Created At</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {enquiries.map((enquiry) => (
-                    <TableRow key={enquiry.id}>
-                      <TableCell>{enquiry.client_name}</TableCell>
-                      <TableCell>{enquiry.client_email}</TableCell>
-                      <TableCell>{enquiry.message.substring(0, 50)}...</TableCell>
-                      <TableCell>{new Date(enquiry.created_at).toLocaleString()}</TableCell>
-                      <TableCell>{getStatusBadge(enquiry.status)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </ScrollArea>
-          ) : (
-            <p>No enquiries available.</p>
-          )}
-        </TabsContent>
-      </Tabs>
     </div>
   );
-}
+};
 
+export default BookPage;

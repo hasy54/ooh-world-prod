@@ -3,12 +3,18 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Inbox, LogOut, Send, Menu } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { LogOut, Send, Menu, Inbox, Plus } from "lucide-react";
 
 type Message = {
   id: string;
@@ -26,6 +32,12 @@ export default function MailPage() {
   const [replyText, setReplyText] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [newMail, setNewMail] = useState({ to: "", subject: "", body: "" });
+
+  const { user } = useUser();
+  const userId = user?.id;
+  const clerkEmail = user?.emailAddresses?.[0]?.emailAddress;
 
   useEffect(() => {
     async function fetchMessages() {
@@ -56,118 +68,137 @@ export default function MailPage() {
   const handleSendReply = async () => {
     if (!selectedMessageId || !replyText.trim()) return;
 
+    const selectedMessage = messages?.find((m) => m.id === selectedMessageId);
+
     try {
       const res = await fetch("/api/gmail/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messageId: selectedMessageId, replyText }),
+        body: JSON.stringify({
+          to: selectedMessage?.from,
+          subject: `Re: ${selectedMessage?.subject || "No subject"}`,
+          body: replyText,
+        }),
       });
 
       if (!res.ok) throw new Error("Failed to send reply");
 
       setReplyText("");
-      // Optionally, you could refresh the messages list here
+      alert("Reply sent successfully!");
     } catch (err) {
       console.error("Error sending reply:", err);
     }
   };
 
-  if (error) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-gray-100">
-        <div className="bg-white p-6 rounded-lg shadow text-center">
-          <h1 className="text-xl font-bold mb-4">{error}</h1>
-          <Link href="/api/auth/login">
-            <Button>Sign in with Google</Button>
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  const handleSendNewMail = async () => {
+    if (!newMail.to.trim() || !newMail.subject.trim() || !newMail.body.trim()) return;
+
+    try {
+      const res = await fetch("/api/gmail/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newMail),
+      });
+
+      if (!res.ok) throw new Error("Failed to send email");
+
+      setComposeOpen(false);
+      setNewMail({ to: "", subject: "", body: "" });
+      alert("Email sent successfully!");
+    } catch (err) {
+      console.error("Error sending email:", err);
+    }
+  };
 
   const selectedMessage = messages?.find((m) => m.id === selectedMessageId);
 
   return (
     <div className="flex flex-col h-screen bg-gray-100">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 p-4 flex justify-between items-center">
-        <h1 className="text-lg font-semibold">Mail</h1>
-        <div className="flex items-center space-x-2">
-          <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
-                <Menu className="h-5 w-5" />
+      <div className="bg-white border-b p-4 flex justify-between items-center shadow-sm">
+        <h1 className="text-lg font-bold">Inbox</h1>
+        <div className="flex space-x-2">
+          <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
+            <DialogTrigger asChild>
+              <Button variant="default" size="sm">
+                <Plus className="mr-2 h-4 w-4" /> Compose
               </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-[300px] sm:w-[400px]">
-              <MessageList
-                messages={messages}
-                isLoading={isLoading}
-                selectedMessageId={selectedMessageId}
-                setSelectedMessageId={setSelectedMessageId}
-                setIsSidebarOpen={setIsSidebarOpen}
-              />
-            </SheetContent>
-          </Sheet>
-          <Button variant="ghost" size="sm" onClick={handleLogout}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Compose New Email</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <Input
+                  placeholder="Recipient email"
+                  value={newMail.to}
+                  onChange={(e) => setNewMail({ ...newMail, to: e.target.value })}
+                />
+                <Input
+                  placeholder="Subject"
+                  value={newMail.subject}
+                  onChange={(e) => setNewMail({ ...newMail, subject: e.target.value })}
+                />
+                <Textarea
+                  placeholder="Write your message here..."
+                  value={newMail.body}
+                  onChange={(e) => setNewMail({ ...newMail, body: e.target.value })}
+                />
+                <Button onClick={handleSendNewMail}>
+                  <Send className="mr-2 h-4 w-4" /> Send
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Button variant="outline" size="sm" onClick={handleLogout}>
+            <LogOut className="mr-2 h-4 w-4" /> Logout
           </Button>
         </div>
       </div>
 
-      {/* Main content */}
+      {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar (hidden on mobile) */}
-        <div className="hidden md:block w-1/3 bg-white border-r border-gray-200">
+        {/* Sidebar */}
+        <ScrollArea className="hidden md:block w-1/3 border-r">
           <MessageList
             messages={messages}
             isLoading={isLoading}
             selectedMessageId={selectedMessageId}
             setSelectedMessageId={setSelectedMessageId}
           />
-        </div>
+        </ScrollArea>
 
-        {/* Message content */}
-        <div className="flex-1 flex flex-col">
+        {/* Email Content */}
+        <div className="flex-1 flex flex-col bg-gray-50">
           {selectedMessage ? (
-            <>
-              {/* Message header */}
-              <div className="bg-white border-b border-gray-200 p-4">
-                <h2 className="text-lg font-semibold">{selectedMessage.subject || "No subject"}</h2>
-                <p className="text-sm text-gray-600">{selectedMessage.from}</p>
-              </div>
-
-              {/* Message body */}
-              <ScrollArea className="flex-1 p-4 bg-gray-50">
-                <div className="whitespace-pre-wrap text-sm text-gray-800 mb-4">
-                  {selectedMessage.snippet || "No content available."}
-                </div>
-              </ScrollArea>
-
-              {/* Reply input */}
-              <div className="bg-white border-t border-gray-200 p-4">
-                <div className="flex items-center space-x-2">
-                  <Input
-                    type="text"
-                    placeholder="Type your reply..."
+            <Card className="flex-1 m-4">
+              <CardHeader>
+                <CardTitle>{selectedMessage.subject || "No subject"}</CardTitle>
+                <p className="text-sm text-gray-500">From: {selectedMessage.from}</p>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-40 mb-4">
+                  <p className="text-sm whitespace-pre-wrap">
+                    {selectedMessage.snippet || "No content available."}
+                  </p>
+                </ScrollArea>
+                {/* Reply Section */}
+                <div className="space-y-2">
+                  <Textarea
+                    placeholder="Write your reply here..."
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
-                    className="flex-1"
                   />
                   <Button onClick={handleSendReply} disabled={!replyText.trim()}>
-                    <Send className="h-4 w-4 mr-2" />
-                    Send
+                    <Send className="mr-2 h-4 w-4" /> Reply
                   </Button>
                 </div>
-              </div>
-            </>
+              </CardContent>
+            </Card>
           ) : (
-            <div className="flex-1 flex items-center justify-center bg-gray-50">
-              <div className="text-center text-gray-500">
-                <Inbox className="h-12 w-12 mx-auto mb-4" />
-                <p>Select a message to view its contents</p>
-              </div>
+            <div className="flex flex-1 items-center justify-center text-gray-500">
+              <Inbox className="w-12 h-12 mr-2" />
+              Select a message to view its content
             </div>
           )}
         </div>
@@ -176,48 +207,43 @@ export default function MailPage() {
   );
 }
 
-function MessageList({ messages, isLoading, selectedMessageId, setSelectedMessageId, setIsSidebarOpen }: {
+function MessageList({
+  messages,
+  isLoading,
+  selectedMessageId,
+  setSelectedMessageId,
+}: {
   messages: Message[] | null;
   isLoading: boolean;
   selectedMessageId: string | null;
   setSelectedMessageId: (id: string) => void;
-  setIsSidebarOpen?: (open: boolean) => void;
-}){
+}) {
   return (
-    <ScrollArea className="h-full">
-      {isLoading ? (
-        Array.from({ length: 5 }).map((_, index) => (
-          <div key={index} className="p-4 border-b border-gray-200">
-            <Skeleton className="h-4 w-3/4 mb-2" />
-            <Skeleton className="h-3 w-1/2" />
-          </div>
-        ))
-      ) : (
-        messages?.map((message) => (
-          <div
-            key={message.id}
-            onClick={() => {
-              setSelectedMessageId(message.id);
-              if (setIsSidebarOpen) setIsSidebarOpen(false);
-            }}
-            className={`p-4 border-b border-gray-200 cursor-pointer ${
-              selectedMessageId === message.id
-                ? "bg-gray-100"
-                : "hover:bg-gray-50"
-            }`}
-          >
-            <div className="font-semibold truncate">{message.subject || "No subject"}</div>
-            <div className="text-sm text-gray-600 truncate">{message.from}</div>
-            <div className="text-sm text-gray-500 truncate">{message.snippet || "No preview"}</div>
-            {message.internalDate && (
-              <div className="text-xs text-gray-400 mt-1">
-                {new Date(Number(message.internalDate)).toLocaleString()}
-              </div>
-            )}
-          </div>
-        ))
-      )}
-    </ScrollArea>
+    <Table>
+      <TableBody>
+        {isLoading
+          ? Array.from({ length: 5 }).map((_, idx) => (
+              <TableRow key={idx}>
+                <TableCell>
+                  <Skeleton className="h-4 w-full" />
+                </TableCell>
+              </TableRow>
+            ))
+          : messages?.map((msg) => (
+              <TableRow
+                key={msg.id}
+                onClick={() => setSelectedMessageId(msg.id)}
+                className={`cursor-pointer hover:bg-gray-100 ${
+                  selectedMessageId === msg.id ? "bg-gray-200" : ""
+                }`}
+              >
+                <TableCell>
+                  <div className="font-medium">{msg.from}</div>
+                  <div className="text-sm text-gray-500">{msg.subject || "No subject"}</div>
+                </TableCell>
+              </TableRow>
+            ))}
+      </TableBody>
+    </Table>
   );
 }
-

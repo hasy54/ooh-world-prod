@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 import { getOAuth2Client } from '@/lib/googleClient';
 
 export async function GET(req: NextRequest) {
