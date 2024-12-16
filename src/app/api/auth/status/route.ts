@@ -34,10 +34,18 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ hasGoogleToken });
   } catch (error) {
-    console.error("Error checking auth status:", error.message);
-    return NextResponse.json(
-      { hasGoogleToken: false, error: "Internal server error" },
-      { status: 500 }
-    );
+    if (error instanceof Error) {
+      console.error("Error checking auth status:", error.message);
+      return NextResponse.json(
+        { hasGoogleToken: false, error: "Internal server error" },
+        { status: 500 }
+      );
+    } else {
+      console.error("Unexpected error:", error);
+      return NextResponse.json(
+        { hasGoogleToken: false, error: "An unexpected error occurred" },
+        { status: 500 }
+      );
+    }
   }
 }
