@@ -3,10 +3,11 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { UserButton } from '@clerk/nextjs';
-import { Menu } from 'lucide-react';
+import { Menu, ArrowUpLeft } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { motion } from 'framer-motion';
 
 import { cn } from '@/lib/utils';
 
@@ -15,12 +16,11 @@ export function MainNav() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navItems = [
-    //{ href: '/home', label: 'Home' }, 
-    { href: '/booking', label: 'Booking' },
-    { href: '/media', label: 'My Media' },
-    { href: '/mail', label: 'Mail' },
-    { href: '/listing', label: 'Listings' },
     { href: '/media-planner', label: 'Planner' },
+    { href: '/mail', label: 'Mail' },
+    { href: '/media', label: 'My Media' },
+    { href: '/booking', label: 'Bookings' },
+    { href: '/listing', label: 'Listings' },
   ];
 
   const NavLinks = () => (
@@ -30,32 +30,39 @@ export function MainNav() {
           key={item.href}
           href={item.href}
           className={cn(
-            "text-sm font-medium transition-colors hover:text-primary",
+            "relative px-3 py-4 text-sm font-medium transition-colors hover:text-black",
             pathname === item.href
-              ? "text-primary"
+              ? "text-black"
               : "text-muted-foreground"
           )}
           onClick={() => setIsMobileMenuOpen(false)}
         >
           {item.label}
+          {pathname === item.href && (
+            <motion.div
+              className="absolute bottom-0 left-0 h-[2px] w-full bg-black"
+              layoutId="underline"
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            />
+          )}
         </Link>
       ))}
     </>
   );
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <motion.header
+      className="sticky top-0 z-50 w-full border-b bg-background"
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
       <div className="container flex h-14 items-center">
-        <Link href="/" className="mr-6 flex items-center space-x-2">
-          <img
-            src="https://pub-e63b17b4d990438a83af58c15949f8a2.r2.dev/type/circle.png"
-            alt="OOH Logo"
-            className="h-6 w-6 rounded-full"
-          />
-
+        <Link href="/" className="mr-6 flex items-center">
+          <ArrowUpLeft className="h-6 w-6" />
         </Link>
-        <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
-          <nav className="hidden md:flex items-center space-x-6">
+        <div className="flex flex-1 items-center justify-between space-x-2">
+          <nav className="hidden md:flex items-center space-x-1 mx-auto">
             <NavLinks />
           </nav>
           <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
@@ -74,10 +81,17 @@ export function MainNav() {
               </nav>
             </SheetContent>
           </Sheet>
-          <UserButton afterSignOutUrl="/" />
+          <UserButton 
+            afterSignOutUrl="/"
+            appearance={{
+              elements: {
+                avatarBox: "h-8 w-8 rounded-full bg-[#7C3AED] text-white"
+              }
+            }}
+          />
         </div>
       </div>
-    </header>
+    </motion.header>
   );
 }
 
