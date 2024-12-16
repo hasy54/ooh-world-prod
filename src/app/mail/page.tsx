@@ -34,31 +34,49 @@ export default function MailPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [newMail, setNewMail] = useState({ to: "", subject: "", body: "" });
+  const [hasGoogleAuth, setHasGoogleAuth] = useState<boolean | null>(null);
 
   const { user } = useUser();
   const userId = user?.id;
   const clerkEmail = user?.emailAddresses?.[0]?.emailAddress;
 
+  // Check Google token availability
   useEffect(() => {
-    async function fetchMessages() {
-      setIsLoading(true);
+    async function checkGoogleAuth() {
       try {
-        const res = await fetch("/api/gmail/messages");
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to fetch messages");
-        }
-        const data: Message[] = await res.json();
-        setMessages(data);
-        if (data.length > 0) setSelectedMessageId(data[0].id);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "An error occurred");
-      } finally {
-        setIsLoading(false);
+        const res = await fetch("/api/auth/status");
+        const data = await res.json();
+        setHasGoogleAuth(data.hasGoogleToken);
+      } catch {
+        setHasGoogleAuth(false);
       }
     }
-    fetchMessages();
+    checkGoogleAuth();
   }, []);
+
+  useEffect(() => {
+    if (hasGoogleAuth) {
+      fetchMessages();
+    }
+  }, [hasGoogleAuth]);
+
+  async function fetchMessages() {
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/gmail/messages");
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Failed to fetch messages");
+      }
+      const data: Message[] = await res.json();
+      setMessages(data);
+      if (data.length > 0) setSelectedMessageId(data[0].id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -90,25 +108,31 @@ export default function MailPage() {
     }
   };
 
-  const handleSendNewMail = async () => {
-    if (!newMail.to.trim() || !newMail.subject.trim() || !newMail.body.trim()) return;
-
-    try {
-      const res = await fetch("/api/gmail/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newMail),
-      });
-
-      if (!res.ok) throw new Error("Failed to send email");
-
-      setComposeOpen(false);
-      setNewMail({ to: "", subject: "", body: "" });
-      alert("Email sent successfully!");
-    } catch (err) {
-      console.error("Error sending email:", err);
-    }
+  const handleGoogleLogin = () => {
+    router.push("/api/auth/login"); // Redirect to Google login endpoint
   };
+
+  if (hasGoogleAuth === false) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-100">
+        <div className="bg-white p-6 rounded-lg shadow text-center">
+          <h1 className="text-xl font-bold mb-4">Sign in with Google</h1>
+          <p className="text-gray-500 mb-4">Access your email inbox by signing in with Google.</p>
+          <Button onClick={handleGoogleLogin}>
+            Sign in with Google
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (hasGoogleAuth === null || isLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-100">
+        <p>Loading...</p>
+      </div>
+    );
+  }
 
   const selectedMessage = messages?.find((m) => m.id === selectedMessageId);
 
@@ -144,7 +168,7 @@ export default function MailPage() {
                   value={newMail.body}
                   onChange={(e) => setNewMail({ ...newMail, body: e.target.value })}
                 />
-                <Button onClick={handleSendNewMail}>
+                <Button onClick={handleSendReply}>
                   <Send className="mr-2 h-4 w-4" /> Send
                 </Button>
               </div>

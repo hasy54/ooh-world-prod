@@ -38,8 +38,9 @@ async function handleLogout(req: NextRequest) {
     // Clear cookies
     clearUserCookie();
 
-    // Redirect to homepage
-    return NextResponse.redirect('/mail');
+   // Redirect to homepage (absolute URL)
+    const baseUrl = `${req.nextUrl.protocol}//${req.nextUrl.host}`;
+    return NextResponse.redirect(`${baseUrl}/mail`);
   } catch (error) {
     if (error instanceof Error) {
       console.error('Logout route error:', error.message);
