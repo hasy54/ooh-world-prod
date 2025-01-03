@@ -1,24 +1,57 @@
-// src/components/columns.tsx
+"use client"
 
-"use client";
+import { ColumnDef } from "@tanstack/react-table"
+import Image from "next/image"
 
-import { ColumnDef } from "@tanstack/react-table";
-import { Media } from "@/types/media"; // Correct import path
-import { Badge } from "@/components/ui/badge";
+export interface Media {
+  image_urls: any;
+  id: string;
+  name: string;
+  location: string;
+  city: string;
+  type: string;
+  subtype: string;
+  width: number;
+  height: number;
+  traffic: string;
+  price: number;
+  availability: string;
+  thumbnail: string;
+}
 
-export const columns: ColumnDef<Media, unknown>[] = [
+export const columns: ColumnDef<Media>[] = [
+  
   {
     accessorKey: "name",
     header: "Name",
-    cell: ({ row }) => <span className="font-medium">{row.getValue("name")}</span>,
   },
   {
     accessorKey: "location",
     header: "Location",
   },
   {
+    accessorKey: "city",
+    header: "City",
+  },
+  {
     accessorKey: "type",
     header: "Type",
+  },
+  {
+    accessorKey: "subtype",
+    header: "Subtype",
+  },
+  {
+    accessorKey: "width",
+    header: "Width",
+  },
+  {
+    accessorKey: "height",
+    header: "Height",
+  },
+  {
+    accessorKey: "traffic",
+    header: "Traffic",
   },
   {
     accessorKey: "price",
@@ -29,20 +62,30 @@ export const columns: ColumnDef<Media, unknown>[] = [
         style: "currency",
         currency: "USD",
       }).format(price);
-
-      return <span className="font-medium">{formatted}</span>;
+      return <div>{formatted}</div>;
     },
   },
   {
     accessorKey: "availability",
-    header: "Status",
+    header: "Availability",
+  },
+  {
+    accessorKey: "thumbnail",
+    header: "Thumbnail",
     cell: ({ row }) => {
-      const availability = row.getValue("availability");
+      const thumbnail = row.getValue("thumbnail") as string;
       return (
-        <Badge variant={availability ? "secondary" : "destructive"}>
-          {availability ? "Available" : "Unavailable"}
-        </Badge>
+        <div className="w-10 h-10">
+          <Image
+            src={thumbnail || "/placeholder.svg"}
+            alt="Thumbnail"
+            width={40}
+            height={40}
+            className="rounded-md object-cover"
+          />
+        </div>
       );
     },
   },
-];
+]
+
