@@ -19,6 +19,7 @@ export function Nav() {
   const [logoSrc, setLogoSrc] = useState<string | null>(null)
   const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null)
   const isExportPage = pathname.startsWith('/media/export')
+  const isSignInPage = pathname.startsWith('/sign-in')
 
   useEffect(() => {
     if (!userId) return
@@ -46,7 +47,7 @@ export function Nav() {
     fetchUserData()
   }, [userId])
 
-  if (isExportPage) {
+  if (isExportPage || isSignInPage) {
     return null
   }
 
